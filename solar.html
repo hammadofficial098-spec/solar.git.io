@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="ur">
+<head>
+<meta charset="utf-8" />
+<title>Solar System Simulation — پورا نظامِ شمسی</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body { height:100%; margin:0; font-family: "Segoe UI", Tahoma, sans-serif; background:#061022; color:#e6eef6; }
+  #app { display:flex; height:100vh; gap:12px; padding:12px; box-sizing:border-box; align-items:stretch; }
+  #canvas-wrap { flex:1; position:relative; border-radius:12px; overflow:hidden; background: radial-gradient(ellipse at center, #071428 0%, #000814 70%); box-shadow:0 6px 30px rgba(0,0,0,0.6); }
+  canvas { width:100%; height:100%; display:block; }
+  #controls { width:320px; min-width:260px; background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06)); border-radius:12px; padding:12px; box-sizing:border-box; }
+  h2 { margin:4px 0 8px 0; font-size:18px; color:#fff; text-align:center; }
+  .row { margin:8px 0; display:flex; gap:8px; align-items:center; }
+  label { font-size:13px; color:#bcd3ea; min-width:90px; display:inline-block; }
+  input[type=range] { width:100%; }
+  button { background:#0b7285; color:white; border:none; padding:8px 10px; border-radius:8px; cursor:pointer; }
+  button.small { padding:6px 8px; font-size:13px; }
+  .muted { color:#95b5cf; font-size:12px; }
+  .info { background:rgba(255,255,255,0.03); padding:8px; border-radius:8px; margin-top:8px; font-size:13px; min-height:88px; overflow:auto; }
+  .toggle { display:inline-flex; gap:6px; align-items:center; }
+  .legend { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  .small-muted { font-size:12px; color:#9fbcd8; }
+  footer { margin-top:12px; font-size:12px; color:#7fa7c7; text-align:center; }
+  a { color:#a8e0ff; text-decoration:none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div id="controls">
+    <h2>نظامِ شمسی — Solar System</h2>
+
+    <div class="row">
+      <label>رفتار (Speed)</label>
+      <input id="speed" type="range" min="0" max="500" value="60">
+      <span id="speedVal" class="small-muted">60×</span>
+    </div>
+
+    <div class="row">
+      <label>Pause / Play</label>
+      <button id="toggle" class="small">Pause</button>
+      <button id="reset" class="small">Reset View</button>
+    </div>
+
+    <div class="row">
+      <label>Options</label>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label class="toggle"><input id="showOrbits" type="checkbox" checked> دکھائیں Orbits</label>
+        <label class="toggle"><input id="showTrails" type="checkbox" checked> دکھائیں Trails</label>
+        <label class="toggle"><input id="labels" type="checkbox" checked> دکھائیں Labels</label>
+        <label class="toggle"><input id="scaleAU" type="checkbox"> Realistic scale (zoom out)</label>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Zoom</label>
+      <input id="zoom" type="range" min="10" max="350" value="100">
+      <span class="small-muted" id="zoomVal">100%</span>
+    </div>
+
+    <div class="row">
+      <label>Center</label>
+      <button id="centerSun" class="small">Sun</button>
+      <button id="centerEarth" class="small">Earth</button>
+      <button id="centerCustom" class="small">Select Planet</button>
+    </div>
+
+    <div class="info" id="info">
+      سورج کو کلک کریں یا کسی بھی سیارے پر کلک کریں — معلومات یہاں آئیں گی.
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <footer>Simple simulation · Sizes & distances scaled for visibility · Click a planet for details</footer>
+  </div>
+</div>
+
+<script>
+/*
+  Solar System Simulation
+  - Single-file HTML + JS
+  - Planets use semi-major axis (AU), orbital period (days), physical radius (km)
+  - Sizes & distances scaled for visibility; "scaleAU" toggle increases realism (zoomed out)
+*/
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+let DPR = Math.max(1, window.devicePixelRatio || 1);
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * DPR);
+  canvas.height = Math.floor(rect.height * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+// Planet data (sun + planets). Distances in AU, orbital period in days, radius in km.
+// Data approximate (mean values), includes Pluto for nostalgia.
+const bodies = [
+  { name: 'Sun', color:'#ffdd66', a:0, period:0, radius_km:696340, isSun:true },
+  { name: 'Mercury', color:'#bdb6a1', a:0.387, period:87.969, radius_km:2439.7 },
+  { name: 'Venus', color:'#eec9a1', a:0.723, period:224.701, radius_km:6051.8 },
+  { name: 'Earth', color:'#3fa8ff', a:1.000, period:365.256, radius_km:6371.0 },
+  { name: 'Mars', color:'#d95c3f', a:1.524, period:686.980, radius_km:3389.5 },
+  { name: 'Jupiter', color:'#e0a86f', a:5.203, period:4332.59, radius_km:69911 },
+  { name: 'Saturn', color:'#e8d39b', a:9.537, period:10759.22, radius_km:58232 },
+  { name: 'Uranus', color:'#9fe3e3', a:19.191, period:30685.4, radius_km:25362 },
+  { name: 'Neptune', color:'#6aa6ff', a:30.07, period:60190, radius_km:24622 },
+  { name: 'Pluto', color:'#c9b7d0', a:39.48, period:90560, radius_km:1188.3 }
+];
+
+// Simulation state
+let sim = {
+  paused: false,
+  speed: 60,     // multiplier of real-time (days per real second roughly)
+  zoom: 100,     // percent
+  showOrbits: true,
+  showTrails: true,
+  showLabels: true,
+  scaleAU: false, // realistic scale toggle
+  centerBodyIndex: 0, // 0 = Sun
+};
+
+const AU_IN_PX_AT_100 = 90; // base: 1 AU = 90 px at zoom=100
+const MIN_TRAIL_LEN = 80;
+
+// Per-body runtime fields
+for (let b of bodies) {
+  b.theta = Math.random() * Math.PI * 2;
+  b.trail = [];
+}
+
+// UI bindings
+const speedEl = document.getElementById('speed');
+const speedVal = document.getElementById('speedVal');
+const toggleBtn = document.getElementById('toggle');
+const resetBtn = document.getElementById('reset');
+const showOrbitsEl = document.getElementById('showOrbits');
+const showTrailsEl = document.getElementById('showTrails');
+const labelsEl = document.getElementById('labels');
+const zoomEl = document.getElementById('zoom');
+const zoomVal = document.getElementById('zoomVal');
+const infoEl = document.getElementById('info');
+const legendEl = document.getElementById('legend');
+const scaleAUEl = document.getElementById('scaleAU');
+const centerSunBtn = document.getElementById('centerSun');
+const centerEarthBtn = document.getElementById('centerEarth');
+const centerCustomBtn = document.getElementById('centerCustom');
+
+speedEl.addEventListener('input', ()=> {
+  sim.speed = Number(speedEl.value);
+  speedVal.textContent = sim.speed + '×';
+});
+toggleBtn.addEventListener('click', ()=>{
+  sim.paused = !sim.paused;
+  toggleBtn.textContent = sim.paused ? 'Play' : 'Pause';
+});
+resetBtn.addEventListener('click', ()=>{
+  panX = panY = 0; sim.zoom = 100; zoomEl.value = 100; zoomVal.textContent = '100%';
+});
+showOrbitsEl.addEventListener('change', ()=> sim.showOrbits = showOrbitsEl.checked);
+showTrailsEl.addEventListener('change', ()=> sim.showTrails = showTrailsEl.checked);
+labelsEl.addEventListener('change', ()=> sim.showLabels = labelsEl.checked);
+zoomEl.addEventListener('input', ()=> {
+  sim.zoom = Number(zoomEl.value);
+  zoomVal.textContent = sim.zoom + '%';
+});
+scaleAUEl.addEventListener('change', ()=> sim.scaleAU = scaleAUEl.checked);
+centerSunBtn.addEventListener('click', ()=> sim.centerBodyIndex = 0);
+centerEarthBtn.addEventListener('click', ()=> sim.centerBodyIndex = 3); // Earth index
+centerCustomBtn.addEventListener('click', ()=> {
+  const name = prompt('Kaun sa planet center karna hai? (ex: Earth, Mars, Jupiter)');
+  if (!name) return;
+  const idx = bodies.findIndex(b => b.name.toLowerCase() === name.toLowerCase());
+  if (idx >= 0) sim.centerBodyIndex = idx;
+  else alert('Planet nahi mila: ' + name);
+});
+
+// legend
+function refreshLegend() {
+  legendEl.innerHTML = '';
+  for (let b of bodies) {
+    const el = document.createElement('div');
+    el.style.display = 'flex';
+    el.style.gap = '6px';
+    el.style.alignItems = 'center';
+    el.innerHTML = `<span class="dot" style="background:${b.color};"></span><span class="small-muted">${b.name}</span>`;
+    legendEl.appendChild(el);
+  }
+}
+refreshLegend();
+
+// drawing helpers
+function worldToScreen(x, y, cx, cy, scale) {
+  return { sx: cx + x*scale + panX, sy: cy + y*scale + panY };
+}
+
+// camera / pan state
+let panX = 0, panY = 0;
+let isDragging = false, lastDrag = null;
+canvas.addEventListener('mousedown', (e)=> { isDragging=true; lastDrag = {x:e.clientX, y:e.clientY}; });
+window.addEventListener('mouseup', ()=> { isDragging=false; lastDrag=null; });
+window.addEventListener('mousemove', (e)=> {
+  if (!isDragging) return;
+  const dx = e.clientX - lastDrag.x;
+  const dy = e.clientY - lastDrag.y;
+  panX += dx; panY += dy;
+  lastDrag = {x:e.clientX, y:e.clientY};
+});
+
+// click detection for planet info
+canvas.addEventListener('click', (e)=> {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) ;
+  const my = (e.clientY - rect.top) ;
+  const cx = rect.width/2;
+  const cy = rect.height/2;
+
+  const scale = computeScale(rect.width);
+  const centerBody = bodies[sim.centerBodyIndex];
+  const centerPos = computeBodyPosition(centerBody, scale);
+
+  for (let i = bodies.length-1; i >= 0; --i) {
+    const b = bodies[i];
+    const pos = computeBodyPosition(b, scale);
+    const screen = worldToScreen(pos.x - centerPos.x, pos.y - centerPos.y, cx, cy, scale);
+    const r = renderRadius(b, scale);
+    const dx = mx - screen.sx;
+    const dy = my - screen.sy;
+    if (dx*dx + dy*dy <= (r+6)*(r+6)) {
+      showInfo(b);
+      return;
+    }
+  }
+});
+
+function showInfo(b) {
+  if (b.isSun) {
+    infoEl.innerHTML = `<b>${b.name}</b><br>Radius: ${formatKM(b.radius_km)} km<br>Center of the system.`;
+    return;
+  }
+  infoEl.innerHTML = `<b>${b.name}</b>
+  <br>Average distance: ${b.a} AU
+  <br>Orbital period: ${Math.round(b.period).toLocaleString()} days
+  <br>Radius: ${formatKM(b.radius_km)} km
+  <br>Click "Center" buttons to follow different bodies.`;
+}
+
+function formatKM(km) { return Number(km).toLocaleString(); }
+
+// compute render radius (px) for a body (scaled & clamped)
+function renderRadius(b, scale) {
+  if (b.isSun) {
+    // Sun appears big
+    return Math.max(10, Math.min(70, (Math.log10(b.radius_km) - 3) * 10));
+  }
+  // Use logarithmic scaling to keep visibility
+  const base = Math.max(1, Math.log10(b.radius_km) - 2.2);
+  const r = base * (sim.zoom/100) * 2.2;
+  return Math.max(3, Math.min(30, r));
+}
+
+function computeScale(canvasWidth) {
+  // base: AU_IN_PX_AT_100 at zoom 100
+  const base = AU_IN_PX_AT_100 * (sim.zoom / 100);
+  if (sim.scaleAU) {
+    // realistic zoom out: compress inner solar system distances relative to outer
+    return base * 0.35;
+  }
+  return base;
+}
+
+function computeBodyPosition(b, scale) {
+  if (b.isSun) return { x:0, y:0 };
+  const angle = b.theta;
+  const r = b.a * 1; // in AU
+  const x = Math.cos(angle) * r;
+  const y = Math.sin(angle) * r;
+  return { x, y };
+}
+
+// animation loop
+let lastTs = performance.now();
+resize();
+
+function step(ts) {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) { requestAnimationFrame(step); return; }
+  const dt_ms = Math.max(0, ts - lastTs);
+  lastTs = ts;
+  const dt_seconds = dt_ms / 1000;
+
+  if (!sim.paused) {
+    // advance angles: amount proportional to 1/period
+    for (let b of bodies) {
+      if (b.isSun) continue;
+      // orbital angular speed (radians per day) = 2π / period
+      const angPerDay = (Math.PI * 2) / b.period;
+      // sim.speed is multiplier in 'days per real second'
+      const deltaDays = sim.speed * dt_seconds;
+      b.theta += angPerDay * deltaDays;
+      // record trail point
+      if (sim.showTrails) {
+        b.trail.push({ theta: b.theta });
+        if (b.trail.length > Math.max(MIN_TRAIL_LEN, Math.floor(300 * (sim.zoom/100)))) b.trail.shift();
+      } else {
+        b.trail = [];
+      }
+    }
+  }
+
+  // clear & draw
+  ctx.fillStyle = '#020612';
+  ctx.fillRect(0,0,rect.width, rect.height);
+
+  // stars background (simple)
+  drawStars(rect.width, rect.height);
+
+  const cx = rect.width/2;
+  const cy = rect.height/2;
+  const scale = computeScale(rect.width);
+
+  // compute center offset: center on sim.centerBodyIndex
+  const centerBody = bodies[sim.centerBodyIndex];
+  const centerPos = computeBodyPosition(centerBody, scale);
+
+  // orbits
+  if (sim.showOrbits) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    for (let b of bodies) {
+      if (b.isSun) continue;
+      const r_px = b.a * scale;
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.ellipse(cx - centerPos.x*scale + panX, cy - centerPos.y*scale + panY, r_px, r_px, 0, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // draw trails
+  if (sim.showTrails) {
+    for (let b of bodies) {
+      if (b.isSun) continue;
+      if (b.trail.length < 2) continue;
+      ctx.beginPath();
+      for (let i=0;i<b.trail.length;i++) {
+        const th = b.trail[i].theta;
+        const rAU = b.a;
+        const x = Math.cos(th) * rAU;
+        const y = Math.sin(th) * rAU;
+        const screen = worldToScreen(x - centerPos.x, y - centerPos.y, cx, cy, scale);
+        if (i==0) ctx.moveTo(screen.sx, screen.sy); else ctx.lineTo(screen.sx, screen.sy);
+      }
+      ctx.strokeStyle = hexToRGBA(b.color, 0.45);
+      ctx.lineWidth = Math.max(1, renderRadius(b, scale)/6);
+      ctx.stroke();
+    }
+  }
+
+  // draw bodies
+  for (let b of bodies) {
+    const pos = computeBodyPosition(b, scale);
+    const screen = worldToScreen(pos.x - centerPos.x, pos.y - centerPos.y, cx, cy, scale);
+    const r = renderRadius(b, scale);
+
+    // glow for sun
+    if (b.isSun) {
+      const g = ctx.createRadialGradient(screen.sx, screen.sy, 0, screen.sx, screen.sy, Math.max(80, r*8));
+      g.addColorStop(0, 'rgba(255,240,180,1)');
+      g.addColorStop(0.2, 'rgba(255,200,120,0.6)');
+      g.addColorStop(1, 'rgba(12,14,20,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(screen.sx, screen.sy, Math.max(80, r*8), 0, Math.PI*2); ctx.fill();
+    }
+
+    // planet body
+    ctx.beginPath();
+    ctx.fillStyle = b.color;
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 0.6;
+    ctx.arc(screen.sx, screen.sy, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    // label
+    if (sim.showLabels && !b.isSun) {
+      ctx.fillStyle = 'rgba(230,240,255,0.9)';
+      ctx.font = `${Math.max(10, Math.min(14, r))}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(b.name, screen.sx, screen.sy - r - 6);
+    }
+  }
+
+  // small HUD: center body name & time speed
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(8,8,220,44);
+  ctx.fillStyle = '#cfeaff';
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.fillText('Center: ' + bodies[sim.centerBodyIndex].name, 16, 26);
+  ctx.fillText('Speed: ' + sim.speed + '×   Zoom: ' + sim.zoom + '%', 16, 44);
+
+  requestAnimationFrame(step);
+}
+requestAnimationFrame(step);
+
+// helper - draws many small stars
+let starsCache = null;
+function drawStars(w,h) {
+  if (!starsCache || starsCache.w !== w || starsCache.h !== h) {
+    starsCache = { w, h, canvas: document.createElement('canvas') };
+    starsCache.canvas.width = w; starsCache.canvas.height = h;
+    const sctx = starsCache.canvas.getContext('2d');
+    sctx.fillStyle = '#020612'; sctx.fillRect(0,0,w,h);
+    const count = Math.floor((w*h)/9000);
+    for (let i=0;i<count;i++) {
+      const x = Math.random()*w, y = Math.random()*h;
+      const t = Math.random();
+      const size = Math.random()*1.8;
+      sctx.fillStyle = `rgba(255,255,255,${0.04 + t*0.5})`;
+      sctx.fillRect(x, y, size, size);
+    }
+  }
+  ctx.drawImage(starsCache.canvas, 0,0);
+}
+
+// color hex -> rgba helper
+function hexToRGBA(hex, alpha=1) {
+  const c = hex.replace('#','');
+  const r = parseInt(c.substr(0,2),16);
+  const g = parseInt(c.substr(2,2),16);
+  const b = parseInt(c.substr(4,2),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// window init
+(function init() {
+  resize();
+  showInfo(bodies[0]);
+})();
+
+// simple inertia zoom (mouse wheel)
+canvas.addEventListener('wheel', (e)=> {
+  e.preventDefault();
+  const delta = Math.sign(e.deltaY);
+  let z = sim.zoom - delta * 6;
+  z = Math.max(10, Math.min(350, z));
+  sim.zoom = z;
+  zoomEl.value = z; zoomVal.textContent = z + '%';
+});
+
+// animate initial orbits and set random starting theta
+for (let b of bodies) b.theta = (Math.random()*360) * (Math.PI/180);
+
+/* End of script */
+</script>
+</body>
+</html>
