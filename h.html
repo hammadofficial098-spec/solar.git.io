@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Happy Birthday Anikah 🌙</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&family=Great+Vibes&display=swap" rel="stylesheet">
+
+<style>
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(180deg, #0f0c29, #302b63, #24243e);
+    overflow-x: hidden;
+    color: white;
+    text-align: center;
+}
+
+/* Stars */
+.star {
+    position: fixed;
+    width: 2px;
+    height: 2px;
+    background: white;
+    animation: twinkle 2s infinite alternate;
+}
+@keyframes twinkle {
+    from {opacity: 0.2;}
+    to {opacity: 1;}
+}
+
+/* Shooting Stars */
+.shooting-star {
+    position: fixed;
+    width: 2px;
+    height: 80px;
+    background: linear-gradient(white, transparent);
+    transform: rotate(45deg);
+    animation: shoot 2s linear infinite;
+}
+@keyframes shoot {
+    0% {transform: translate(0,0) rotate(45deg); opacity:1;}
+    100% {transform: translate(-500px,500px) rotate(45deg); opacity:0;}
+}
+
+/* Moon */
+.moon {
+    position: absolute;
+    top: 50px;
+    right: 60px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, #fff, #ddd);
+    border-radius: 50%;
+    box-shadow: 0 0 40px white;
+}
+
+/* Heading */
+h1 {
+    font-family: 'Great Vibes', cursive;
+    font-size: 55px;
+    margin-top: 80px;
+    color: #ffd6ff;
+    text-shadow: 0 0 20px #ff9ae6;
+}
+
+/* Typing Message */
+.typing {
+    max-width: 650px;
+    margin: 20px auto;
+    font-size: 18px;
+    line-height: 1.7;
+    border-right: 2px solid white;
+    white-space: pre-line;
+    overflow: hidden;
+}
+
+/* Button */
+button {
+    margin-top: 25px;
+    padding: 12px 25px;
+    border-radius: 25px;
+    border: none;
+    background: #ff9ae6;
+    color: black;
+    cursor: pointer;
+    transition: 0.3s;
+}
+button:hover {
+    transform: scale(1.1);
+    background: #ffd6ff;
+}
+
+#surprise {
+    display: none;
+    margin-top: 20px;
+    font-size: 20px;
+}
+
+/* Mobile */
+@media(max-width:600px){
+    h1 {font-size: 38px;}
+}
+</style>
+</head>
+
+<body>
+
+<!-- Background Music -->
+<audio autoplay loop>
+    <source src="https://www.bensound.com/bensound-music/bensound-romantic.mp3" type="audio/mp3">
+</audio>
+
+<div class="moon"></div>
+
+<h1>Happy Birthday Anikah 🌙❤️</h1>
+
+<div class="typing" id="typing"></div>
+
+<button onclick="showSurprise()">Click for Surprise 🎁</button>
+
+<div id="surprise">
+    💕 You are my moon, my peace, my happiness… forever and always 💕
+</div>
+
+<script>
+/* Stars */
+for(let i=0;i<120;i++){
+    let star=document.createElement("div");
+    star.classList.add("star");
+    star.style.top=Math.random()*100+"vh";
+    star.style.left=Math.random()*100+"vw";
+    document.body.appendChild(star);
+}
+
+/* Shooting Stars */
+setInterval(()=>{
+    let s=document.createElement("div");
+    s.classList.add("shooting-star");
+    s.style.top=Math.random()*50+"vh";
+    s.style.left=Math.random()*100+"vw";
+    document.body.appendChild(s);
+    setTimeout(()=>{s.remove();},2000);
+},1500);
+
+/* Typing Effect */
+const text = `My dearest Anikah,
+
+In this silent night full of stars... 🌌  
+I just want to tell you something from my heart...
+
+You are not just special...  
+You are the most beautiful part of my life 💖  
+
+Like the moon shines in darkness,  
+you shine in my world 🌙  
+
+Your smile... your presence... everything about you feels magical ✨  
+
+I wish your life is always full of happiness, love, and endless smiles...
+
+Happy Birthday once again... ❤️`;
+
+let i = 0;
+function typingEffect(){
+    if(i < text.length){
+        document.getElementById("typing").innerHTML += text.charAt(i);
+        i++;
+        setTimeout(typingEffect, 40);
+    }
+}
+typingEffect();
+
+/* Surprise */
+function showSurprise(){
+    document.getElementById("surprise").style.display="block";
+}
+</script>
+
+</body>
+</html>
